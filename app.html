@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Locadora - Painel</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="bg-app">
+
+<div id="app" class="hidden">
+
+    <div class="navbar">
+        <h2>Bem-vindo(a), <span id="userName"></span>!</h2>
+        <button id="btnLogout">Sair</button>
+    </div>
+
+    <!-- EDIÇÃO DE USUÁRIO -->
+    <div class="card">
+        <h3>Editar Usuário</h3>
+        <input id="editName" placeholder="Nome">
+        <input id="editEmail" placeholder="Email">
+        <button id="btnUpdateUser">Salvar</button>
+        <button id="btnDeleteUser" class="danger">Excluir Conta</button>
+    </div>
+
+
+    <!-- LISTA DE VEÍCULOS -->
+    <div class="card">
+        <h3>Veículos</h3>
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <button id="btnReloadVeiculos">Recarregar Lista</button>
+            <button id="btnModoCriar">Cadastrar Novo</button>
+        </div>
+        <div id="veiculos"></div>
+    </div>
+
+    <!-- FORM VEÍCULO -->
+    <div id="formVeiculo" class="card hidden">
+        <h3 id="formTitle">Novo Veículo</h3>
+        <input id="vModelo" placeholder="Modelo">
+        <input id="vMarca" placeholder="Marca">
+        <input id="vAno" placeholder="Ano">
+        <input id="vPlaca" placeholder="Placa">
+        <input id="vPreco" placeholder="Preço">
+        
+        <select id="vStatus">
+            <option value="DISPONIVEL">DISPONÍVEL</option>
+            <option value="INDISPONIVEL">INDISPONÍVEL</option>
+        </select>
+
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <button id="btnSalvarVeiculo">Salvar</button>
+            <button id="btnCancelarVeiculo" class="danger">Cancelar</button>
+        </div>
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

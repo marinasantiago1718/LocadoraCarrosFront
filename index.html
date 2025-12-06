@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Locadora - Login</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="bg-auth">
+
+<!-- LOGIN / CADASTRO -->
+<div id="auth-wrapper">
+    
+    <!-- LOGIN -->
+    <div id="login-card" class="card">
+        <h2>Login</h2>
+        <input id="loginEmail" placeholder="Email">
+        <input id="loginSenha" type="password" placeholder="Senha">
+        <button id="btnLogin">Entrar</button>
+        <p class="switch" id="toCadastro">Criar conta</p>
+    </div>
+
+    <!-- CADASTRO -->
+    <div id="cadastro-card" class="card hidden">
+        <h2>Criar Conta</h2>
+        <input id="cadNome" placeholder="Nome">
+        <input id="cadEmail" placeholder="Email">
+        <input id="cadSenha" type="password" placeholder="Senha">
+        <button id="btnCadastrar">Cadastrar</button>
+        <p class="switch" id="toLogin">Já tenho conta</p>
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
