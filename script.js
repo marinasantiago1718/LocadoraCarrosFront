@@ -593,7 +593,6 @@ async function processarPagamento(reserva, valor, metodoPagamento) {
         clienteId: String(reserva.clienteId), 
         valor: valor,
         metodoPagamento: metodoPagamento,
-        descricao: `Reserva #${reserva.id}` 
     };
 
     try {
