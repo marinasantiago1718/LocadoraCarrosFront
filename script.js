@@ -298,6 +298,84 @@ async function deletarVeiculo(id) {
     }
 }
 
-/* placeholders */
-function reservar(id){ alert("Reserva (placeholder) id=" + id); }
-function pagar(id){ alert("Pagamento (placeholder) id=" + id); }
+/* ================= INTEGRAÇÃO PAGAMENTOS ================= */
+
+// Função temporária para simular reserva, pois não temos o endpoint de reserva no pagamento MS
+async function reservar(veiculoId) {
+    if (!confirm(`Confirmar reserva para o veículo ID ${veiculoId}?`)) return;
+    
+    // NOTA: Idealmente, esta chamada iria para o MS de Veículos para alterar o status para RESERVADO
+    // Por enquanto, apenas um placeholder para feedback
+    alert(`Veículo ${veiculoId} reservado (Ação Placeholder).`);
+    loadVeiculos();
+}
+
+// -------------------------------------------------------------
+// FUNÇÃO PRINCIPAL DE PAGAMENTO
+// -------------------------------------------------------------
+async function pagar(veiculo) {
+    // 1. Encontrar o veículo no MS Veículos para obter o preço e detalhes
+    try {
+        const respVeiculo = await fetch(`${API_VEICULOS}/${veiculo}`);
+        if (!respVeiculo.ok) throw new Error("Veículo não encontrado.");
+        
+        const v = await respVeiculo.json();
+        
+        const valor = v.preco; // Usa o preço do veículo
+        
+        // 2. Abrir um prompt para confirmação e método
+        const metodo = prompt(`Confirmar pagamento de R$ ${valor.toFixed(2)} para o veículo ${v.modelo} (${v.marca})? Digite o método de pagamento (PIX, BOLETO, CARTAO_CREDITO):`);
+
+        if (!metodo) return; // Cancelado
+        
+        const metodoUpper = metodo.trim().toUpperCase();
+        
+        // 3. Validação básica do método (baseado no seu Enum)
+        if (!["PIX", "BOLETO", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
+            return alert("Método de pagamento inválido. Use PIX, BOLETO, ou CARTAO_CREDITO.");
+        }
+        
+        await confirmarPagamento(userLogged.id, valor, metodoUpper);
+
+    } catch (err) {
+        console.error("Erro ao iniciar pagamento:", err);
+        alert("Erro ao preparar pagamento. Verifique o console.");
+    }
+}
+
+// -------------------------------------------------------------
+// FUNÇÃO QUE CHAMA O MICROSERVICE DE PAGAMENTOS (POST)
+// -------------------------------------------------------------
+async function confirmarPagamento(clienteId, valor, metodoPagamento) {
+    const body = {
+        clienteId: Number(clienteId), // O userLogged.id é o clienteId
+        valor: Number(valor),
+        metodoPagamento: metodoPagamento // PIX, BOLETO, etc.
+        // Se houver 'descricao' no seu DTO, adicione aqui
+    };
+
+    try {
+        const resp = await fetch(API_PAGAMENTOS, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(body)
+        });
+
+        if (!resp.ok) {
+            // Se o status não for 2xx, tenta ler a mensagem de erro do backend
+            const errorText = await resp.text();
+            throw new Error(`Falha no pagamento (HTTP ${resp.status}): ${errorText}`);
+        }
+
+        const pagamentoResponse = await resp.json();
+        
+        // Sucesso: O pagamento foi criado no status PROCESSANDO
+        alert(`Pagamento criado com sucesso! ID: ${pagamentoResponse.id}. Status: ${pagamentoResponse.status}.`);
+
+        // Idealmente, aqui você chamaria um PATCH/PUT no MS Veículos para mudar o status para 'RESERVADO' ou 'PAGO'
+
+    } catch (err) {
+        console.error("Erro na API de Pagamentos:", err);
+        alert(`Falha ao processar pagamento. ${err.message}`);
+    }
+}
