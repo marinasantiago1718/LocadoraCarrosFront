@@ -510,12 +510,12 @@ function pagarReservaDireta(idReserva, valor, idCarro) {
     reservaParaPagar = reservaMock; 
     
     // Inicia fluxo
-    const metodo = prompt(`Pagar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?\n\nDigite o método: PIX, BOLETO ou CARTAO_CREDITO`);
+    const metodo = prompt(`Pagar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?\n\nDigite o método: PIX, CARTAO_DEBITO ou CARTAO_CREDITO`);
     
     if(!metodo) return;
 
     const metodoUpper = metodo.trim().toUpperCase();
-    if (!["PIX", "BOLETO", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
+    if (!["PIX", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
         return alert("Método inválido.");
     }
 
