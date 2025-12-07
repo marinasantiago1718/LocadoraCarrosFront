@@ -389,31 +389,42 @@ async function confirmarReservaHandler() {
 
 /* ================= INTEGRAÇÃO PAGAMENTOS ================= */
 
-// Função temporária para simular reserva, pois não temos o endpoint de reserva no pagamento MS
-async function reservar(veiculoId) {
-    if (!confirm(`Confirmar reserva para o veículo ID ${veiculoId}?`)) return;
-    
-    // NOTA: Idealmente, esta chamada iria para o MS de Veículos para alterar o status para RESERVADO
-    // Por enquanto, apenas um placeholder para feedback
-    alert(`Veículo ${veiculoId} reservado (Ação Placeholder).`);
-    loadVeiculos();
-}
+// Variável global para armazenar temporariamente o objeto de reserva que será pago
+let reservaParaPagar = null; 
 
 // -------------------------------------------------------------
-// FUNÇÃO PRINCIPAL DE PAGAMENTO
+// FUNÇÃO PRINCIPAL DE PAGAMENTO (Chamada pelo botão "Pagar")
 // -------------------------------------------------------------
-async function pagar(veiculo) {
-    // 1. Encontrar o veículo no MS Veículos para obter o preço e detalhes
+async function pagar(veiculoId) {
+    if (!userLogged || !userLogged.id) return alert("Erro: Usuário não identificado.");
+
+    // 1. Tentar encontrar uma reserva ativa para este veículo e este usuário
     try {
-        const respVeiculo = await fetch(`${API_VEICULOS}/${veiculo}`);
-        if (!respVeiculo.ok) throw new Error("Veículo não encontrado.");
+        // NOTA: Idealmente, o MS de Reservas teria um endpoint para buscar "reservas ativas por veiculoId e clienteId".
+        // Como não temos esse endpoint, vamos simular que a reserva já foi criada ou que precisamos buscá-la.
         
-        const v = await respVeiculo.json();
+        // Simulação: buscar a reserva pelo veiculoId
+        const respReservas = await fetch(`${API_RESERVAS}?veiculoId=${veiculoId}`); 
         
-        const valor = v.preco; // Usa o preço do veículo
+        // Se a API_RESERVAS não suportar a query string, essa busca pode falhar.
+        // Assumindo que API_RESERVAS retorna todas as reservas e podemos filtrar:
+        const todasReservas = await respReservas.json();
+        const reserva = todasReservas.find(r => 
+            r.categoriaCarroId == veiculoId && 
+            r.clienteId == userLogged.id &&
+            r.status === 'RESERVADO' // A reserva deve estar em um status que permite pagamento
+        );
+
+        if (!reserva) {
+            return alert("Não foi encontrada uma reserva ativa para este veículo e usuário. Por favor, reserve primeiro.");
+        }
         
-        // 2. Abrir um prompt para confirmação e método
-        const metodo = prompt(`Confirmar pagamento de R$ ${valor.toFixed(2)} para o veículo ${v.modelo} (${v.marca})? Digite o método de pagamento (PIX, BOLETO, CARTAO_CREDITO):`);
+        reservaParaPagar = reserva; // Armazena a reserva no global
+
+        const valor = reserva.valorTotalEstimado; 
+        
+        // 2. Abrir prompt para confirmação e método de pagamento
+        const metodo = prompt(`Confirmar pagamento de R$ ${valor.toFixed(2)} (Reserva ID: ${reserva.id})? Digite o método de pagamento (PIX, BOLETO, CARTAO_CREDITO):`);
 
         if (!metodo) return; // Cancelado
         
@@ -424,23 +435,27 @@ async function pagar(veiculo) {
             return alert("Método de pagamento inválido. Use PIX, BOLETO, ou CARTAO_CREDITO.");
         }
         
-        await confirmarPagamento(userLogged.id, valor, metodoUpper);
+        // 4. Chamar a função de criação de pagamento
+        await confirmarPagamento(reservaParaPagar, valor, metodoUpper);
 
     } catch (err) {
         console.error("Erro ao iniciar pagamento:", err);
-        alert("Erro ao preparar pagamento. Verifique o console.");
+        alert("Erro ao preparar pagamento. Verifique se o MS Reservas está funcionando e se a reserva existe.");
     }
 }
 
 // -------------------------------------------------------------
 // FUNÇÃO QUE CHAMA O MICROSERVICE DE PAGAMENTOS (POST)
 // -------------------------------------------------------------
-async function confirmarPagamento(clienteId, valor, metodoPagamento) {
+async function confirmarPagamento(reserva, valor, metodoPagamento) {
     const body = {
-        clienteId: Number(clienteId), // O userLogged.id é o clienteId
-        valor: Number(valor),
-        metodoPagamento: metodoPagamento // PIX, BOLETO, etc.
-        // Se houver 'descricao' no seu DTO, adicione aqui
+        clienteId: reserva.clienteId, 
+        valor: valor,
+        metodoPagamento: metodoPagamento,
+        // É crucial incluir o ID da Reserva para que o pagamento possa ser rastreado.
+        // Se o seu DTO de Pagamento não tiver um campo 'reservaId', você terá que adaptar o backend.
+        // Assumindo que o MS Pagamento tem um campo para descrição ou referência da reserva:
+        descricao: `Reserva #${reserva.id} - Veículo ID ${reserva.categoriaCarroId}` 
     };
 
     try {
@@ -451,20 +466,23 @@ async function confirmarPagamento(clienteId, valor, metodoPagamento) {
         });
 
         if (!resp.ok) {
-            // Se o status não for 2xx, tenta ler a mensagem de erro do backend
             const errorText = await resp.text();
             throw new Error(`Falha no pagamento (HTTP ${resp.status}): ${errorText}`);
         }
 
         const pagamentoResponse = await resp.json();
         
-        // Sucesso: O pagamento foi criado no status PROCESSANDO
         alert(`Pagamento criado com sucesso! ID: ${pagamentoResponse.id}. Status: ${pagamentoResponse.status}.`);
 
-        // Idealmente, aqui você chamaria um PATCH/PUT no MS Veículos para mudar o status para 'RESERVADO' ou 'PAGO'
+        // Idealmente, você faria um PATCH no MS Reservas aqui para mudar o status da reserva para "PAGA" ou "FINALIZADA"
+        // Exemplo: 
+        // await fetch(`${API_RESERVAS}/${reserva.id}`, { method: "PATCH", body: JSON.stringify({ status: "PAGA" }) });
+
+        loadVeiculos(); // Recarrega para ver mudanças
 
     } catch (err) {
         console.error("Erro na API de Pagamentos:", err);
         alert(`Falha ao processar pagamento. ${err.message}`);
     }
 }
+
