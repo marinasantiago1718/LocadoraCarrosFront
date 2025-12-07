@@ -1,5 +1,6 @@
 const API_USERS = "https://userservice-u3s8.onrender.com/users";
 const API_VEICULOS = "https://ms-veiculos.onrender.com/api/veiculos";
+const API_PAGAMENTOS = "https://microservicepagamento.onrender.com/pagamentos";
 
 let userLogged = null;
 let editandoVeiculoId = null;
