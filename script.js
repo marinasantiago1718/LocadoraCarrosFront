@@ -107,8 +107,6 @@ function initAppPage() {
     document.getElementById("userName").textContent = userLogged.name;
     document.getElementById("editName").value = userLogged.name;
     document.getElementById("editEmail").value = userLogged.email;
-    document.getElementById("btnReloadReservas").onclick = loadReservas;
-    document.getElementById("btnSearchReserva").onclick = searchReservaHandler;
 
     // Logout
     document.getElementById("btnLogout").onclick = () => {
@@ -130,6 +128,8 @@ function initAppPage() {
 
     // Reservas Actions
     document.getElementById("btnReloadReservas").onclick = loadReservas;
+    document.getElementById("btnSearchReserva").onclick = searchReservaHandler;
+    
     document.getElementById("btnConfirmarReserva").onclick = confirmarReservaHandler;
     document.getElementById("btnCancelarReserva").onclick = () => {
         document.getElementById("formReserva").classList.add("hidden");
@@ -141,18 +141,16 @@ function initAppPage() {
     loadReservas();
 }
 
-/* =============== PESQUISA DE RESERVAS (CORRIGIDO) =============== */
+/* =============== PESQUISA DE RESERVAS =============== */
 async function searchReservaHandler() {
     const termo = document.getElementById("searchReservaId").value.trim();
     const container = document.getElementById("reservas-list");
 
-    // 1. Se estiver vazio, recarrega tudo e para
     if (!termo) {
         loadReservas();
         return;
     }
 
-    // 2. Verificação de segurança do usuário
     if (!userLogged || !userLogged.id) {
         alert("Erro: Você precisa estar logado para buscar.");
         return;
@@ -161,37 +159,28 @@ async function searchReservaHandler() {
     container.innerHTML = "Buscando...";
 
     try {
-        // Busca todas as reservas
         const resp = await fetch(API_RESERVAS);
-        
         if (!resp.ok) throw new Error(`Erro na API: ${resp.status}`);
         
         const todas = await resp.json();
         
-        console.log("Total recebido:", todas.length); // Debug
-
-        // 3. Filtro Robusto
+        // Filtra por ID e Usuário
         const filtradas = todas.filter(r => {
-            // Converte tudo para String para garantir a comparação
             const idReserva = String(r.id);
             const idClienteReserva = String(r.clienteId);
             const idUsuarioLogado = String(userLogged.id);
-
-            // Verifica se o ID bate E se a reserva pertence ao usuário logado
             return idReserva === termo && idClienteReserva === idUsuarioLogado;
         });
 
-        console.log("Encontradas:", filtradas); // Debug
-
-        // 4. Renderiza
         renderizarListaReservas(filtradas, container);
 
     } catch (err) {
-        console.error("ERRO DETALHADO DA BUSCA:", err); // <--- OLHE O CONSOLE F12 SE O ERRO PERSISTIR
+        console.error("Erro busca:", err);
         container.innerHTML = `<p style="color:red">Erro ao buscar: ${err.message}</p>`;
     }
 }
 
+// Renderiza a lista de reservas na tela
 function renderizarListaReservas(lista, container) {
     container.innerHTML = "";
 
@@ -199,6 +188,13 @@ function renderizarListaReservas(lista, container) {
         container.innerHTML = "<p>Nenhuma reserva encontrada.</p>";
         return;
     }
+
+    // Ordena: PENDENTE -> CONFIRMADA -> Outras
+    lista.sort((a, b) => {
+        if (a.status === 'PENDENTE' && b.status !== 'PENDENTE') return -1;
+        if (a.status !== 'PENDENTE' && b.status === 'PENDENTE') return 1;
+        return b.id - a.id;
+    });
 
     lista.forEach(r => {
         const div = document.createElement("div");
@@ -208,6 +204,7 @@ function renderizarListaReservas(lista, container) {
         if(r.status === 'PENDENTE') corStatus = "orange";
         if(r.status === 'CONFIRMADA') corStatus = "green";
         if(r.status === 'CANCELADA') corStatus = "red";
+        if(r.status === 'CONCLUIDA') corStatus = "black";
         
         div.style.borderLeft = `5px solid ${corStatus}`;
         
@@ -236,7 +233,11 @@ function renderizarListaReservas(lista, container) {
                     `<button onclick="pagarReservaDireta(${r.id}, ${r.valorTotalEstimado}, ${r.categoriaCarroId})" style="background-color:green; color:white;">Pagar Agora</button>` 
                     : ''}
                 
-                ${r.status !== 'CANCELADA' && r.status !== 'CONCLUIDA' ? 
+                ${r.status === 'CONFIRMADA' ? 
+                    `<button onclick="concluirReserva(${r.id})" style="background-color:#2196F3; color:white;">Devolver Veículo</button>` 
+                    : ''}
+                    
+                ${r.status === 'PENDENTE' ? 
                     `<button onclick="cancelarReserva(${r.id})" class="danger">Cancelar</button>` 
                     : ''}
             </div>
@@ -306,41 +307,51 @@ async function loadVeiculos() {
         lista.sort((a, b) => (a.status === 'DISPONIVEL' ? -1 : 1));
 
         lista.forEach(v => {
-            const id = v.id ?? v.codigo ?? "";
-            const disponivel = v.status === "DISPONIVEL" || v.status === "disponível";
+    const id = v.id ?? v.codigo ?? "";
+    
+    // Verifica status visualmente
+    const isDisponivel = v.status === "DISPONIVEL" || v.status === "disponível";
+    const isAlugado = v.status === "ALUGADO";
+    
+    // Se for INDISPONIVEL (manutenção), bloqueia. Se for ALUGADO, libera.
+    const podeReservar = isDisponivel || isAlugado;
 
-            const div = document.createElement("div");
-            div.className = "veiculo-item";
-            // Estilo visual simples para status
-            div.style.borderLeft = disponivel ? "4px solid green" : "4px solid gray";
+    const div = document.createElement("div");
+    div.className = "veiculo-item";
+    
+    // Cores: Verde (Livre), Laranja (Alugado), Cinza (Indisponível/Manutenção)
+    if (isDisponivel) div.style.borderLeft = "4px solid green";
+    else if (isAlugado) div.style.borderLeft = "4px solid orange";
+    else div.style.borderLeft = "4px solid gray";
 
-            div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <strong>${escapeHtml(v.marca)} - ${escapeHtml(v.modelo)}</strong><br>
-                        <small>Ano: ${v.ano} • Placa: ${escapeHtml(v.placa)}</small>
-                    </div>
+    div.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <strong>${escapeHtml(v.marca)} - ${escapeHtml(v.modelo)}</strong><br>
+                <small>Ano: ${v.ano} • Placa: ${escapeHtml(v.placa)}</small>
+            </div>
 
-                    <div style="display:flex; gap:8px;">
-                        <button onclick="editarVeiculo('${id}')">Editar</button>
-                        
-                        <button onclick="abrirModalReserva('${id}')" 
-                            style="${disponivel ? 'background-color:#4CAF50;color:white;' : 'background-color:#ccc;cursor:not-allowed;'}"
-                            ${!disponivel ? "disabled" : ""}>
-                            ${disponivel ? "Reservar" : "Indisponível"}
-                        </button>
+            <div style="display:flex; gap:8px;">
+                <button onclick="editarVeiculo('${id}')">Editar</button>
+                
+                <button onclick="abrirModalReserva('${id}')" 
+                    style="${podeReservar ? 'background-color:#4CAF50;color:white;' : 'background-color:#ccc;cursor:not-allowed;'}"
+                    ${!podeReservar ? "disabled" : ""}>
+                    ${podeReservar ? "Reservar" : "Indisponível"}
+                </button>
 
-                        <button class="danger" onclick="deletarVeiculo('${id}')">Excluir</button>
-                    </div>
-                </div>
+                <button class="danger" onclick="deletarVeiculo('${id}')">Excluir</button>
+            </div>
+        </div>
 
-                <div style="margin-top:8px;">
-                    Status: <strong>${v.status}</strong> • Diária: R$ ${v.preco}
-                </div>
-            `;
+        <div style="margin-top:8px;">
+            Status: <strong>${v.status}</strong> • Diária: R$ ${v.preco}
+            ${isAlugado ? '<br><small style="color:orange">Alugado no momento (verifique disponibilidade futura)</small>' : ''}
+        </div>
+    `;
 
-            container.appendChild(div);
-        });
+    container.appendChild(div);
+    });
 
     } catch (err) {
         console.error(err);
@@ -429,7 +440,7 @@ async function deletarVeiculo(id) {
     }
 }
 
-/* =============== RESERVAS (Lógica e Listagem) =============== */
+/* =============== RESERVAS (Carregamento) =============== */
 
 // Lista as reservas do usuário logado
 async function loadReservas() {
@@ -444,69 +455,10 @@ async function loadReservas() {
         
         const todasReservas = await resp.json();
 
-        // Filtro por usuário (ID convertido para string para garantir)
+        // Filtro por usuário
         const minhasReservas = todasReservas.filter(r => String(r.clienteId) === String(userLogged.id));
 
-        container.innerHTML = "";
-
-        if (minhasReservas.length === 0) {
-            container.innerHTML = "<p>Você não possui reservas.</p>";
-            return;
-        }
-
-        // Ordena: PENDENTE primeiro, depois as mais recentes (ID maior)
-        minhasReservas.sort((a, b) => {
-            if (a.status === 'PENDENTE' && b.status !== 'PENDENTE') return -1;
-            if (a.status !== 'PENDENTE' && b.status === 'PENDENTE') return 1;
-            return b.id - a.id;
-        });
-
-        minhasReservas.forEach(r => {
-            const div = document.createElement("div");
-            div.className = "veiculo-item"; // Reusa CSS
-            
-            // Cores da borda lateral conforme status
-            let corStatus = "gray";
-            if(r.status === 'PENDENTE') corStatus = "orange";
-            if(r.status === 'CONFIRMADA') corStatus = "green";
-            if(r.status === 'CANCELADA') corStatus = "red";
-            
-            div.style.borderLeft = `5px solid ${corStatus}`;
-            
-            // Formatar datas e valores
-            const dtInicio = new Date(r.dataInicio).toLocaleString('pt-BR');
-            const dtFim = new Date(r.dataFim).toLocaleString('pt-BR');
-            const valor = r.valorTotalEstimado 
-                ? r.valorTotalEstimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                : "R$ --";
-
-            div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <strong>Reserva #${r.id}</strong> <span style="font-size:0.8em; color:#666;">(Carro ID: ${r.categoriaCarroId})</span><br>
-                        <small>Retirada: ${dtInicio}</small><br>
-                        <small>Devolução: ${dtFim}</small>
-                    </div>
-
-                    <div style="text-align:right;">
-                        <div style="font-weight:bold; margin-bottom:5px;">${valor}</div>
-                        <span style="padding:4px 8px; border-radius:4px; font-size:0.8em; background:#eee; font-weight:bold;">${r.status}</span>
-                    </div>
-                </div>
-
-                <div style="margin-top:10px; display:flex; justify-content:flex-end; gap:5px;">
-                    ${r.status === 'PENDENTE' ? 
-                        `<button onclick="pagarReservaDireta(${r.id}, ${r.valorTotalEstimado}, ${r.categoriaCarroId})" style="background-color:green; color:white;">Pagar Agora</button>` 
-                        : ''}
-                    
-                    ${r.status !== 'CANCELADA' && r.status !== 'CONCLUIDA' ? 
-                        `<button onclick="cancelarReserva(${r.id})" class="danger">Cancelar</button>` 
-                        : ''}
-                </div>
-            `;
-
-            container.appendChild(div);
-        });
+        renderizarListaReservas(minhasReservas, container);
 
     } catch (err) {
         console.error(err);
@@ -547,9 +499,9 @@ async function confirmarReservaHandler() {
     if (!inicio || !fim) return alert("Selecione as datas.");
 
     const payload = {
-        clienteId: String(userLogged.id), // Garante envio como String
+        clienteId: String(userLogged.id),
         categoriaCarroId: Number(veiculoParaReservarId),
-        dataInicio: inicio + ":00", // Formato ISO para LocalDateTime
+        dataInicio: inicio + ":00",
         dataFim: fim + ":00"
     };
 
@@ -574,7 +526,6 @@ async function confirmarReservaHandler() {
 
         document.getElementById("formReserva").classList.add("hidden");
         
-        // Atualiza ambas as listas
         loadVeiculos();
         loadReservas();
 
@@ -585,7 +536,6 @@ async function confirmarReservaHandler() {
 }
 
 // Cancela uma reserva
-// Cancela uma reserva
 async function cancelarReserva(id) {
     if(!confirm(`Tem certeza que deseja cancelar a reserva #${id}?`)) return;
     
@@ -593,7 +543,7 @@ async function cancelarReserva(id) {
         const resp = await fetch(`${API_RESERVAS}/${id}/status`, {
             method: "PATCH",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ status: "CANCELADA" }) // Certifique-se que é maiúsculo igual ao Enum Java
+            body: JSON.stringify({ status: "CANCELADA" })
         });
 
         if (!resp.ok) {
@@ -603,7 +553,6 @@ async function cancelarReserva(id) {
 
         alert("Reserva cancelada com sucesso.");
         
-        // Atualiza as listas para refletir a mudança de status e cor
         loadReservas();
         loadVeiculos(); 
 
@@ -617,7 +566,6 @@ async function cancelarReserva(id) {
 
 // Função chamada pelo botão "Pagar Agora" na lista de reservas
 function pagarReservaDireta(idReserva, valor, idCarro) {
-    // Cria objeto temporário
     const reservaMock = {
         id: idReserva,
         valorTotalEstimado: valor,
@@ -627,13 +575,12 @@ function pagarReservaDireta(idReserva, valor, idCarro) {
     
     reservaParaPagar = reservaMock; 
     
-    // Inicia fluxo
-    const metodo = prompt(`Pagar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?\n\nDigite o método: PIX, CARTAO_DEBITO ou CARTAO_CREDITO`);
+    const metodo = prompt(`Pagar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?\n\nDigite o método: PIX, BOLETO ou CARTAO_CREDITO`);
     
     if(!metodo) return;
 
     const metodoUpper = metodo.trim().toUpperCase();
-    if (!["PIX", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
+    if (!["PIX", "BOLETO", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
         return alert("Método inválido.");
     }
 
@@ -679,5 +626,33 @@ async function processarPagamento(reserva, valor, metodoPagamento) {
     } catch (err) {
         console.error("Falha no pagamento:", err);
         alert(`Falha: ${err.message}`);
+    }
+}
+
+// --- FUNÇÃO DE DEVOLUÇÃO (ESTAVA FORA DO ESCOPO) ---
+// Agora está acessível globalmente
+async function concluirReserva(id) {
+    if(!confirm(`Confirmar a devolução do veículo e concluir a reserva #${id}?`)) return;
+    
+    try {
+        const resp = await fetch(`${API_RESERVAS}/${id}/status`, {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ status: "CONCLUIDA" }) 
+        });
+
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(errText || "Erro ao concluir reserva.");
+        }
+
+        alert("Veículo devolvido e reserva concluída!");
+        
+        loadReservas();
+        loadVeiculos(); 
+
+    } catch(e) {
+        console.error(e);
+        alert("Erro: " + e.message);
     }
 }
