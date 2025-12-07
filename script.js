@@ -575,12 +575,12 @@ function pagarReservaDireta(idReserva, valor, idCarro) {
     
     reservaParaPagar = reservaMock; 
     
-    const metodo = prompt(`Pagar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?\n\nDigite o método: PIX, BOLETO ou CARTAO_CREDITO`);
+    const metodo = prompt(`Pagar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?\n\nDigite o método: PIX, CARTAO_DEBITO ou CARTAO_CREDITO`);
     
     if(!metodo) return;
 
     const metodoUpper = metodo.trim().toUpperCase();
-    if (!["PIX", "BOLETO", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
+    if (!["PIX", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
         return alert("Método inválido.");
     }
 
@@ -654,4 +654,56 @@ async function concluirReserva(id) {
         console.error(e);
         alert("Erro: " + e.message);
     }
+}
+
+async function processarPagamento(reserva, valor, metodoPagamento) {
+    const bodyPagamento = {
+        clienteId: reserva.clienteId,
+        valor: valor,
+        metodoPagamento: metodoPagamento,
+    };
+
+    try {
+        const respPag = await fetch(API_PAGAMENTOS, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(bodyPagamento)
+        });
+
+        if (!respPag.ok) {
+            const erroTxt = await respPag.text();
+            throw new Error(`Erro no MS Pagamento ao criar: ${erroTxt}`);
+        }
+
+        const pagCriado = await respPag.json();
+        console.log("Pagamento criado (PROCESSANDO):", pagCriado);
+        
+        const respStatusPagamento = await fetch(`${API_PAGAMENTOS}/${pagCriado.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "SUCESSO" })
+        });
+
+        if (!respStatusPagamento.ok) {
+            console.error("Falha ao atualizar status do pagamento para SUCESSO. Continuando com a reserva.");
+        } else {
+            console.log(`Status do Pagamento #${pagCriado.id} atualizado para SUCESSO.`);
+        }
+
+
+        await fetch(`${API_RESERVAS}/${reserva.id}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "CONFIRMADA" })
+        });
+
+        alert(`Pagamento e Reserva Confirmados! (Pagamento ID: ${pagCriado.id})`);
+        
+        loadReservas();
+        loadVeiculos();
+
+    } catch (err) {
+        console.error("Falha no pagamento:", err);
+        alert(`Falha: ${err.message}`);
+    }
 }
