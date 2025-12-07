@@ -115,7 +115,7 @@ function initAppPage() {
     document.getElementById("btnModoCriar").onclick = modoCriar;
     document.getElementById("btnSalvarVeiculo").onclick = salvarVeiculo;
     document.getElementById("btnCancelarVeiculo").onclick = () => {
-        document.getElementById("formVeiculo").classList.add("hidden");
+    document.getElementById("formVeiculo").classList.add("hidden");
     };
 
     /* NOVO → LISTAR USUÁRIOS */
