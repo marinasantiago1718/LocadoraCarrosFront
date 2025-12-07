@@ -309,7 +309,6 @@ async function deletarVeiculo(id) {
     }
 }
 
-/* placeholders */
 /* =============== RESERVAS =============== */
 let veiculoParaReservarId = null;
 
@@ -387,7 +386,7 @@ async function confirmarReservaHandler() {
         alert("Falha na reserva: " + err.message);
     }
 }
-function pagar(id){ alert("Pagamento (placeholder) id=" + id); }
+
 /* ================= INTEGRAÇÃO PAGAMENTOS ================= */
 
 // Função temporária para simular reserva, pois não temos o endpoint de reserva no pagamento MS
