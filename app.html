@@ -55,6 +55,22 @@
         </div>
     </div>
 
+    <div id="formReserva" class="card hidden" style="border: 2px solid #4CAF50;">
+        <h3>Nova Reserva</h3>
+        <p>Veículo: <strong id="reservaVeiculoNome">---</strong></p>
+        
+        <label>Data de Retirada:</label>
+        <input type="datetime-local" id="resDataInicio" style="width: 100%; margin-bottom: 10px;">
+        
+        <label>Data de Devolução:</label>
+        <input type="datetime-local" id="resDataFim" style="width: 100%; margin-bottom: 10px;">
+
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <button id="btnConfirmarReserva" style="background-color: #4CAF50;">Confirmar Reserva</button>
+            <button id="btnCancelarReserva" class="danger">Cancelar</button>
+        </div>
+    </div>
+
 </div>
 
 <script src="script.js"></script>
