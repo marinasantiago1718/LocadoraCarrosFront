@@ -15,7 +15,6 @@
         <button id="btnLogout">Sair</button>
     </div>
 
-    <!-- EDIÇÃO DE USUÁRIO -->
     <div class="card">
         <h3>Editar Usuário</h3>
         <input id="editName" placeholder="Nome">
@@ -24,10 +23,8 @@
         <button id="btnDeleteUser" class="danger">Excluir Conta</button>
     </div>
 
-
-    <!-- LISTA DE VEÍCULOS -->
     <div class="card">
-        <h3>Veículos</h3>
+        <h3>Veículos Disponíveis</h3>
         <div style="display:flex; gap:10px; margin-bottom:10px;">
             <button id="btnReloadVeiculos">Recarregar Lista</button>
             <button id="btnModoCriar">Cadastrar Novo</button>
@@ -35,18 +32,26 @@
         <div id="veiculos"></div>
     </div>
 
-    <!-- FORM VEÍCULO -->
+    <div class="card" style="margin-top: 20px; border-left: 5px solid #2196F3;">
+        <h3>Minhas Reservas</h3>
+        <button id="btnReloadReservas" style="margin-bottom:10px;">Atualizar Reservas</button>
+        <div id="reservas-list">
+            <p>Carregando...</p>
+        </div>
+    </div>
+
     <div id="formVeiculo" class="card hidden">
         <h3 id="formTitle">Novo Veículo</h3>
         <input id="vModelo" placeholder="Modelo">
         <input id="vMarca" placeholder="Marca">
         <input id="vAno" placeholder="Ano">
         <input id="vPlaca" placeholder="Placa">
-        <input id="vPreco" placeholder="Preço">
+        <input id="vPreco" placeholder="Preço (Diária)">
         
         <select id="vStatus">
             <option value="DISPONIVEL">DISPONÍVEL</option>
             <option value="INDISPONIVEL">INDISPONÍVEL</option>
+            <option value="ALUGADO">ALUGADO</option>
         </select>
 
         <div style="display:flex; gap:10px; margin-top:10px;">

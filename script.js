@@ -1,3 +1,4 @@
+// --- CONFIGURAÇÃO DAS APIs ---
 const API_USERS = "https://userservice-u3s8.onrender.com/users";
 const API_VEICULOS = "https://ms-veiculos.onrender.com/api/veiculos";
 const API_RESERVAS = "https://reserva-service-dijf.onrender.com/reservas";
@@ -5,6 +6,8 @@ const API_PAGAMENTOS = "https://microservicepagamento.onrender.com/pagamentos";
 
 let userLogged = null;
 let editandoVeiculoId = null;
+let veiculoParaReservarId = null; // Guarda o ID do carro para reserva
+let reservaParaPagar = null;      // Guarda o objeto reserva para pagamento
 
 /* ---------- Helper ---------- */
 function escapeHtml(str) {
@@ -105,35 +108,35 @@ function initAppPage() {
     document.getElementById("editName").value = userLogged.name;
     document.getElementById("editEmail").value = userLogged.email;
 
+    // Logout
     document.getElementById("btnLogout").onclick = () => {
         sessionStorage.removeItem("userLogged");
         window.location.href = "index.html";
     };
 
+    // User Actions
     document.getElementById("btnUpdateUser").onclick = updateUser;
     document.getElementById("btnDeleteUser").onclick = deleteUser;
 
+    // Veículos Actions
     document.getElementById("btnReloadVeiculos").onclick = loadVeiculos;
     document.getElementById("btnModoCriar").onclick = modoCriar;
     document.getElementById("btnSalvarVeiculo").onclick = salvarVeiculo;
     document.getElementById("btnCancelarVeiculo").onclick = () => {
-    document.getElementById("formVeiculo").classList.add("hidden");
-    };
-
-    document.getElementById("btnCancelarVeiculo").onclick = () => {
         document.getElementById("formVeiculo").classList.add("hidden");
     };
 
+    // Reservas Actions
+    document.getElementById("btnReloadReservas").onclick = loadReservas;
     document.getElementById("btnConfirmarReserva").onclick = confirmarReservaHandler;
     document.getElementById("btnCancelarReserva").onclick = () => {
         document.getElementById("formReserva").classList.add("hidden");
-        veiculoParaReservarId = null; // Limpa variável temporária
+        veiculoParaReservarId = null;
     };
 
-    /* NOVO → LISTAR USUÁRIOS */
-    
+    // Carregamento inicial
     loadVeiculos();
-   
+    loadReservas();
 }
 
 /* =============== USUÁRIO =============== */
@@ -176,8 +179,6 @@ async function deleteUser() {
     }
 }
 
-
-
 /* =============== VEÍCULOS =============== */
 async function loadVeiculos() {
     const container = document.getElementById("veiculos");
@@ -194,11 +195,18 @@ async function loadVeiculos() {
             return;
         }
 
+        // Ordena para mostrar disponíveis primeiro
+        lista.sort((a, b) => (a.status === 'DISPONIVEL' ? -1 : 1));
+
         lista.forEach(v => {
             const id = v.id ?? v.codigo ?? "";
+            const disponivel = v.status === "DISPONIVEL" || v.status === "disponível";
 
             const div = document.createElement("div");
             div.className = "veiculo-item";
+            // Estilo visual simples para status
+            div.style.borderLeft = disponivel ? "4px solid green" : "4px solid gray";
+
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div>
@@ -208,14 +216,19 @@ async function loadVeiculos() {
 
                     <div style="display:flex; gap:8px;">
                         <button onclick="editarVeiculo('${id}')">Editar</button>
-                        <button onclick="reservar('${id}')" ${v.status !== "DISPONIVEL" ? "disabled" : ""}>Reservar</button>
-                        <button onclick="pagar('${id}')" ${v.status !== "DISPONIVEL" ? "disabled" : ""}>Pagar</button>
+                        
+                        <button onclick="abrirModalReserva('${id}')" 
+                            style="${disponivel ? 'background-color:#4CAF50;color:white;' : 'background-color:#ccc;cursor:not-allowed;'}"
+                            ${!disponivel ? "disabled" : ""}>
+                            ${disponivel ? "Reservar" : "Indisponível"}
+                        </button>
+
                         <button class="danger" onclick="deletarVeiculo('${id}')">Excluir</button>
                     </div>
                 </div>
 
                 <div style="margin-top:8px;">
-                    Status: ${v.status} • Preço: R$ ${v.preco}
+                    Status: <strong>${v.status}</strong> • Diária: R$ ${v.preco}
                 </div>
             `;
 
@@ -309,10 +322,93 @@ async function deletarVeiculo(id) {
     }
 }
 
-/* =============== RESERVAS =============== */
-let veiculoParaReservarId = null;
+/* =============== RESERVAS (Lógica e Listagem) =============== */
 
-async function reservar(id) {
+// Lista as reservas do usuário logado
+async function loadReservas() {
+    const container = document.getElementById("reservas-list");
+    container.innerHTML = "Carregando...";
+
+    if (!userLogged || !userLogged.id) return;
+
+    try {
+        const resp = await fetch(API_RESERVAS);
+        if (!resp.ok) throw new Error("Erro ao buscar reservas");
+        
+        const todasReservas = await resp.json();
+
+        // Filtro por usuário (ID convertido para string para garantir)
+        const minhasReservas = todasReservas.filter(r => String(r.clienteId) === String(userLogged.id));
+
+        container.innerHTML = "";
+
+        if (minhasReservas.length === 0) {
+            container.innerHTML = "<p>Você não possui reservas.</p>";
+            return;
+        }
+
+        // Ordena: PENDENTE primeiro, depois as mais recentes (ID maior)
+        minhasReservas.sort((a, b) => {
+            if (a.status === 'PENDENTE' && b.status !== 'PENDENTE') return -1;
+            if (a.status !== 'PENDENTE' && b.status === 'PENDENTE') return 1;
+            return b.id - a.id;
+        });
+
+        minhasReservas.forEach(r => {
+            const div = document.createElement("div");
+            div.className = "veiculo-item"; // Reusa CSS
+            
+            // Cores da borda lateral conforme status
+            let corStatus = "gray";
+            if(r.status === 'PENDENTE') corStatus = "orange";
+            if(r.status === 'CONFIRMADA') corStatus = "green";
+            if(r.status === 'CANCELADA') corStatus = "red";
+            
+            div.style.borderLeft = `5px solid ${corStatus}`;
+            
+            // Formatar datas e valores
+            const dtInicio = new Date(r.dataInicio).toLocaleString('pt-BR');
+            const dtFim = new Date(r.dataFim).toLocaleString('pt-BR');
+            const valor = r.valorTotalEstimado 
+                ? r.valorTotalEstimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                : "R$ --";
+
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong>Reserva #${r.id}</strong> <span style="font-size:0.8em; color:#666;">(Carro ID: ${r.categoriaCarroId})</span><br>
+                        <small>Retirada: ${dtInicio}</small><br>
+                        <small>Devolução: ${dtFim}</small>
+                    </div>
+
+                    <div style="text-align:right;">
+                        <div style="font-weight:bold; margin-bottom:5px;">${valor}</div>
+                        <span style="padding:4px 8px; border-radius:4px; font-size:0.8em; background:#eee; font-weight:bold;">${r.status}</span>
+                    </div>
+                </div>
+
+                <div style="margin-top:10px; display:flex; justify-content:flex-end; gap:5px;">
+                    ${r.status === 'PENDENTE' ? 
+                        `<button onclick="pagarReservaDireta(${r.id}, ${r.valorTotalEstimado}, ${r.categoriaCarroId})" style="background-color:green; color:white;">Pagar Agora</button>` 
+                        : ''}
+                    
+                    ${r.status !== 'CANCELADA' && r.status !== 'CONCLUIDA' ? 
+                        `<button onclick="cancelarReserva(${r.id})" class="danger">Cancelar</button>` 
+                        : ''}
+                </div>
+            `;
+
+            container.appendChild(div);
+        });
+
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = "Erro ao carregar lista de reservas.";
+    }
+}
+
+// Abre o Modal de Reserva
+async function abrirModalReserva(id) {
     try {
         const resp = await fetch(`${API_VEICULOS}/${id}`);
         const veiculo = await resp.json();
@@ -320,20 +416,20 @@ async function reservar(id) {
         veiculoParaReservarId = id;
         document.getElementById("reservaVeiculoNome").textContent = `${veiculo.marca} ${veiculo.modelo} (${veiculo.placa})`;
         
+        // Limpa campos
         document.getElementById("resDataInicio").value = "";
         document.getElementById("resDataFim").value = "";
 
         document.getElementById("formReserva").classList.remove("hidden");
-
         document.getElementById("formReserva").scrollIntoView({ behavior: 'smooth' });
 
     } catch (err) {
-        alert("Erro ao carregar dados do veículo para reserva.");
+        alert("Erro ao carregar dados do veículo.");
         console.error(err);
     }
 }
 
-// Função chamada ao clicar em "Confirmar Reserva"
+// Envia a Reserva para o Backend
 async function confirmarReservaHandler() {
     if (!userLogged || !userLogged.id) return alert("Erro: Usuário não identificado.");
     if (!veiculoParaReservarId) return alert("Erro: Nenhum veículo selecionado.");
@@ -341,17 +437,16 @@ async function confirmarReservaHandler() {
     const inicio = document.getElementById("resDataInicio").value;
     const fim = document.getElementById("resDataFim").value;
 
-    if (!inicio || !fim) return alert("Selecione as datas de retirada e devolução.");
+    if (!inicio || !fim) return alert("Selecione as datas.");
 
-    // O backend espera LocalDateTime (ISO 8601). O input datetime-local gera algo como "2023-12-01T10:00"
-    // Vamos garantir que esteja no formato correto (adicionando segundos se necessário)
-    
     const payload = {
-        clienteId: userLogged.id, // ID do usuário logado
-        categoriaCarroId: Number(veiculoParaReservarId), // ID do veículo
-        dataInicio: inicio + ":00", // Adiciona segundos para compatibilidade com Java LocalDateTime
+        clienteId: String(userLogged.id), // Garante envio como String
+        categoriaCarroId: Number(veiculoParaReservarId),
+        dataInicio: inicio + ":00", // Formato ISO para LocalDateTime
         dataFim: fim + ":00"
     };
+
+    console.log("Enviando Reserva:", payload);
 
     try {
         const resp = await fetch(API_RESERVAS, {
@@ -361,25 +456,20 @@ async function confirmarReservaHandler() {
         });
 
         if (!resp.ok) {
-            // Tenta pegar a mensagem de erro do backend (ex: "Carro indisponível")
             const errorText = await resp.text(); 
             throw new Error(errorText || "Erro ao criar reserva");
         }
 
         const reservaCriada = await resp.json();
+        const valorFmt = reservaCriada.valorTotalEstimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-        // Formata o valor para moeda
-        const valorFormatado = reservaCriada.valorTotalEstimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        alert(`Reserva criada!\nStatus: ${reservaCriada.status}\nValor: ${valorFmt}`);
 
-        alert(`Reserva confirmada com sucesso!\n\nStatus: ${reservaCriada.status}\nValor Estimado: ${valorFormatado}`);
-
-        // Esconde o formulário
         document.getElementById("formReserva").classList.add("hidden");
         
-        // RECARREGA A LISTA DE VEÍCULOS
-        // Isso é crucial: o status do carro mudou para "ALUGADO" no backend,
-        // precisamos atualizar a tela para bloquear o botão "Reservar" desse carro.
+        // Atualiza ambas as listas
         loadVeiculos();
+        loadReservas();
 
     } catch (err) {
         console.error(err);
@@ -387,102 +477,89 @@ async function confirmarReservaHandler() {
     }
 }
 
-/* ================= INTEGRAÇÃO PAGAMENTOS ================= */
-
-// Variável global para armazenar temporariamente o objeto de reserva que será pago
-let reservaParaPagar = null; 
-
-// -------------------------------------------------------------
-// FUNÇÃO PRINCIPAL DE PAGAMENTO (Chamada pelo botão "Pagar")
-// -------------------------------------------------------------
-async function pagar(veiculoId) {
-    if (!userLogged || !userLogged.id) return alert("Erro: Usuário não identificado.");
-
-    // 1. Tentar encontrar uma reserva ativa para este veículo e este usuário
+// Cancela uma reserva
+async function cancelarReserva(id) {
+    if(!confirm("Deseja cancelar esta reserva?")) return;
+    
     try {
-        // NOTA: Idealmente, o MS de Reservas teria um endpoint para buscar "reservas ativas por veiculoId e clienteId".
-        // Como não temos esse endpoint, vamos simular que a reserva já foi criada ou que precisamos buscá-la.
-        
-        // Simulação: buscar a reserva pelo veiculoId
-        const respReservas = await fetch(`${API_RESERVAS}?veiculoId=${veiculoId}`); 
-        
-        // Se a API_RESERVAS não suportar a query string, essa busca pode falhar.
-        // Assumindo que API_RESERVAS retorna todas as reservas e podemos filtrar:
-        const todasReservas = await respReservas.json();
-        const reserva = todasReservas.find(r => 
-            r.categoriaCarroId == veiculoId && 
-            r.clienteId == userLogged.id &&
-            r.status === 'RESERVADO' // A reserva deve estar em um status que permite pagamento
-        );
-
-        if (!reserva) {
-            return alert("Não foi encontrada uma reserva ativa para este veículo e usuário. Por favor, reserve primeiro.");
-        }
-        
-        reservaParaPagar = reserva; // Armazena a reserva no global
-
-        const valor = reserva.valorTotalEstimado; 
-        
-        // 2. Abrir prompt para confirmação e método de pagamento
-        const metodo = prompt(`Confirmar pagamento de R$ ${valor.toFixed(2)} (Reserva ID: ${reserva.id})? Digite o método de pagamento (PIX, BOLETO, CARTAO_CREDITO):`);
-
-        if (!metodo) return; // Cancelado
-        
-        const metodoUpper = metodo.trim().toUpperCase();
-        
-        // 3. Validação básica do método (baseado no seu Enum)
-        if (!["PIX", "BOLETO", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
-            return alert("Método de pagamento inválido. Use PIX, BOLETO, ou CARTAO_CREDITO.");
-        }
-        
-        // 4. Chamar a função de criação de pagamento
-        await confirmarPagamento(reservaParaPagar, valor, metodoUpper);
-
-    } catch (err) {
-        console.error("Erro ao iniciar pagamento:", err);
-        alert("Erro ao preparar pagamento. Verifique se o MS Reservas está funcionando e se a reserva existe.");
+        await fetch(`${API_RESERVAS}/${id}/status`, {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ status: "CANCELADA" })
+        });
+        alert("Reserva cancelada.");
+        loadReservas();
+        loadVeiculos(); // O carro volta a ficar disponível
+    } catch(e) {
+        alert("Erro ao cancelar.");
     }
 }
 
-// -------------------------------------------------------------
-// FUNÇÃO QUE CHAMA O MICROSERVICE DE PAGAMENTOS (POST)
-// -------------------------------------------------------------
-async function confirmarPagamento(reserva, valor, metodoPagamento) {
-    const body = {
-        clienteId: reserva.clienteId, 
+/* ================= PAGAMENTOS ================= */
+
+// Função chamada pelo botão "Pagar Agora" na lista de reservas
+function pagarReservaDireta(idReserva, valor, idCarro) {
+    // Cria objeto temporário
+    const reservaMock = {
+        id: idReserva,
+        valorTotalEstimado: valor,
+        clienteId: userLogged.id,
+        categoriaCarroId: idCarro
+    };
+    
+    reservaParaPagar = reservaMock; 
+    
+    // Inicia fluxo
+    const metodo = prompt(`Pagar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?\n\nDigite o método: PIX, BOLETO ou CARTAO_CREDITO`);
+    
+    if(!metodo) return;
+
+    const metodoUpper = metodo.trim().toUpperCase();
+    if (!["PIX", "BOLETO", "CARTAO_CREDITO", "CARTAO_DEBITO"].includes(metodoUpper)) {
+        return alert("Método inválido.");
+    }
+
+    processarPagamento(reservaParaPagar, valor, metodoUpper);
+}
+
+// Chama o MS de Pagamentos
+async function processarPagamento(reserva, valor, metodoPagamento) {
+    const bodyPagamento = {
+        clienteId: String(reserva.clienteId), 
         valor: valor,
         metodoPagamento: metodoPagamento,
-        // É crucial incluir o ID da Reserva para que o pagamento possa ser rastreado.
-        // Se o seu DTO de Pagamento não tiver um campo 'reservaId', você terá que adaptar o backend.
-        // Assumindo que o MS Pagamento tem um campo para descrição ou referência da reserva:
-        descricao: `Reserva #${reserva.id} - Veículo ID ${reserva.categoriaCarroId}` 
+        descricao: `Reserva #${reserva.id}` 
     };
 
     try {
-        const resp = await fetch(API_PAGAMENTOS, {
+        const respPag = await fetch(API_PAGAMENTOS, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(body)
+            body: JSON.stringify(bodyPagamento)
         });
 
-        if (!resp.ok) {
-            const errorText = await resp.text();
-            throw new Error(`Falha no pagamento (HTTP ${resp.status}): ${errorText}`);
+        if (!respPag.ok) {
+            const erroTxt = await respPag.text();
+            throw new Error(`Erro no MS Pagamento: ${erroTxt}`);
         }
 
-        const pagamentoResponse = await resp.json();
+        const pagCriado = await respPag.json();
+        console.log("Pagamento criado:", pagCriado);
+
+        // Atualiza status da reserva para CONFIRMADA
+        await fetch(`${API_RESERVAS}/${reserva.id}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "CONFIRMADA" })
+        });
+
+        alert(`Pagamento Confirmado! (ID: ${pagCriado.id})`);
         
-        alert(`Pagamento criado com sucesso! ID: ${pagamentoResponse.id}. Status: ${pagamentoResponse.status}.`);
-
-        // Idealmente, você faria um PATCH no MS Reservas aqui para mudar o status da reserva para "PAGA" ou "FINALIZADA"
-        // Exemplo: 
-        // await fetch(`${API_RESERVAS}/${reserva.id}`, { method: "PATCH", body: JSON.stringify({ status: "PAGA" }) });
-
-        loadVeiculos(); // Recarrega para ver mudanças
+        loadReservas();
+        loadVeiculos();
 
     } catch (err) {
-        console.error("Erro na API de Pagamentos:", err);
-        alert(`Falha ao processar pagamento. ${err.message}`);
+        console.error("Falha no pagamento:", err);
+        alert(`Falha: ${err.message}`);
     }
 }
-
