@@ -192,6 +192,60 @@ async function searchReservaHandler() {
     }
 }
 
+function renderizarListaReservas(lista, container) {
+    container.innerHTML = "";
+
+    if (lista.length === 0) {
+        container.innerHTML = "<p>Nenhuma reserva encontrada.</p>";
+        return;
+    }
+
+    lista.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "veiculo-item";
+        
+        let corStatus = "gray";
+        if(r.status === 'PENDENTE') corStatus = "orange";
+        if(r.status === 'CONFIRMADA') corStatus = "green";
+        if(r.status === 'CANCELADA') corStatus = "red";
+        
+        div.style.borderLeft = `5px solid ${corStatus}`;
+        
+        const dtInicio = new Date(r.dataInicio).toLocaleString('pt-BR');
+        const dtFim = new Date(r.dataFim).toLocaleString('pt-BR');
+        const valor = r.valorTotalEstimado 
+            ? r.valorTotalEstimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+            : "R$ --";
+
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <strong>Reserva #${r.id}</strong> <span style="font-size:0.8em; color:#666;">(Carro ID: ${r.categoriaCarroId})</span><br>
+                    <small>Retirada: ${dtInicio}</small><br>
+                    <small>Devolução: ${dtFim}</small>
+                </div>
+
+                <div style="text-align:right;">
+                    <div style="font-weight:bold; margin-bottom:5px;">${valor}</div>
+                    <span style="padding:4px 8px; border-radius:4px; font-size:0.8em; background:#eee; font-weight:bold;">${r.status}</span>
+                </div>
+            </div>
+
+            <div style="margin-top:10px; display:flex; justify-content:flex-end; gap:5px;">
+                ${r.status === 'PENDENTE' ? 
+                    `<button onclick="pagarReservaDireta(${r.id}, ${r.valorTotalEstimado}, ${r.categoriaCarroId})" style="background-color:green; color:white;">Pagar Agora</button>` 
+                    : ''}
+                
+                ${r.status !== 'CANCELADA' && r.status !== 'CONCLUIDA' ? 
+                    `<button onclick="cancelarReserva(${r.id})" class="danger">Cancelar</button>` 
+                    : ''}
+            </div>
+        `;
+
+        container.appendChild(div);
+    });
+}
+
 /* =============== USUÁRIO =============== */
 async function updateUser() {
     const body = {
