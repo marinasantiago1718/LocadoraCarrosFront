@@ -1,5 +1,6 @@
 const API_USERS = "https://userservice-u3s8.onrender.com/users";
 const API_VEICULOS = "https://ms-veiculos.onrender.com/api/veiculos";
+const API_RESERVAS = "https://reserva-service-dijf.onrender.com/reservas";
 
 let userLogged = null;
 let editandoVeiculoId = null;
@@ -116,6 +117,16 @@ function initAppPage() {
     document.getElementById("btnSalvarVeiculo").onclick = salvarVeiculo;
     document.getElementById("btnCancelarVeiculo").onclick = () => {
         document.getElementById("formVeiculo").classList.add("hidden");
+    };
+
+    document.getElementById("btnCancelarVeiculo").onclick = () => {
+        document.getElementById("formVeiculo").classList.add("hidden");
+    };
+
+    document.getElementById("btnConfirmarReserva").onclick = confirmarReservaHandler;
+    document.getElementById("btnCancelarReserva").onclick = () => {
+        document.getElementById("formReserva").classList.add("hidden");
+        veiculoParaReservarId = null; // Limpa variável temporária
     };
 
     /* NOVO → LISTAR USUÁRIOS */
@@ -298,5 +309,81 @@ async function deletarVeiculo(id) {
 }
 
 /* placeholders */
-function reservar(id){ alert("Reserva (placeholder) id=" + id); }
+/* =============== RESERVAS =============== */
+let veiculoParaReservarId = null;
+
+async function reservar(id) {
+    try {
+        const resp = await fetch(`${API_VEICULOS}/${id}`);
+        const veiculo = await resp.json();
+        
+        veiculoParaReservarId = id;
+        document.getElementById("reservaVeiculoNome").textContent = `${veiculo.marca} ${veiculo.modelo} (${veiculo.placa})`;
+        
+        document.getElementById("resDataInicio").value = "";
+        document.getElementById("resDataFim").value = "";
+
+        document.getElementById("formReserva").classList.remove("hidden");
+
+        document.getElementById("formReserva").scrollIntoView({ behavior: 'smooth' });
+
+    } catch (err) {
+        alert("Erro ao carregar dados do veículo para reserva.");
+        console.error(err);
+    }
+}
+
+// Função chamada ao clicar em "Confirmar Reserva"
+async function confirmarReservaHandler() {
+    if (!userLogged || !userLogged.id) return alert("Erro: Usuário não identificado.");
+    if (!veiculoParaReservarId) return alert("Erro: Nenhum veículo selecionado.");
+
+    const inicio = document.getElementById("resDataInicio").value;
+    const fim = document.getElementById("resDataFim").value;
+
+    if (!inicio || !fim) return alert("Selecione as datas de retirada e devolução.");
+
+    // O backend espera LocalDateTime (ISO 8601). O input datetime-local gera algo como "2023-12-01T10:00"
+    // Vamos garantir que esteja no formato correto (adicionando segundos se necessário)
+    
+    const payload = {
+        clienteId: userLogged.id, // ID do usuário logado
+        categoriaCarroId: Number(veiculoParaReservarId), // ID do veículo
+        dataInicio: inicio + ":00", // Adiciona segundos para compatibilidade com Java LocalDateTime
+        dataFim: fim + ":00"
+    };
+
+    try {
+        const resp = await fetch(API_RESERVAS, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+            // Tenta pegar a mensagem de erro do backend (ex: "Carro indisponível")
+            const errorText = await resp.text(); 
+            throw new Error(errorText || "Erro ao criar reserva");
+        }
+
+        const reservaCriada = await resp.json();
+
+        // Formata o valor para moeda
+        const valorFormatado = reservaCriada.valorTotalEstimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        alert(`Reserva confirmada com sucesso!\n\nStatus: ${reservaCriada.status}\nValor Estimado: ${valorFormatado}`);
+
+        // Esconde o formulário
+        document.getElementById("formReserva").classList.add("hidden");
+        
+        // RECARREGA A LISTA DE VEÍCULOS
+        // Isso é crucial: o status do carro mudou para "ALUGADO" no backend,
+        // precisamos atualizar a tela para bloquear o botão "Reservar" desse carro.
+        loadVeiculos();
+
+    } catch (err) {
+        console.error(err);
+        alert("Falha na reserva: " + err.message);
+    }
+}
 function pagar(id){ alert("Pagamento (placeholder) id=" + id); }
