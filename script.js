@@ -107,6 +107,8 @@ function initAppPage() {
     document.getElementById("userName").textContent = userLogged.name;
     document.getElementById("editName").value = userLogged.name;
     document.getElementById("editEmail").value = userLogged.email;
+    document.getElementById("btnReloadReservas").onclick = loadReservas;
+    document.getElementById("btnSearchReserva").onclick = searchReservaHandler;
 
     // Logout
     document.getElementById("btnLogout").onclick = () => {
@@ -137,6 +139,57 @@ function initAppPage() {
     // Carregamento inicial
     loadVeiculos();
     loadReservas();
+}
+
+/* =============== PESQUISA DE RESERVAS (CORRIGIDO) =============== */
+async function searchReservaHandler() {
+    const termo = document.getElementById("searchReservaId").value.trim();
+    const container = document.getElementById("reservas-list");
+
+    // 1. Se estiver vazio, recarrega tudo e para
+    if (!termo) {
+        loadReservas();
+        return;
+    }
+
+    // 2. Verificação de segurança do usuário
+    if (!userLogged || !userLogged.id) {
+        alert("Erro: Você precisa estar logado para buscar.");
+        return;
+    }
+
+    container.innerHTML = "Buscando...";
+
+    try {
+        // Busca todas as reservas
+        const resp = await fetch(API_RESERVAS);
+        
+        if (!resp.ok) throw new Error(`Erro na API: ${resp.status}`);
+        
+        const todas = await resp.json();
+        
+        console.log("Total recebido:", todas.length); // Debug
+
+        // 3. Filtro Robusto
+        const filtradas = todas.filter(r => {
+            // Converte tudo para String para garantir a comparação
+            const idReserva = String(r.id);
+            const idClienteReserva = String(r.clienteId);
+            const idUsuarioLogado = String(userLogged.id);
+
+            // Verifica se o ID bate E se a reserva pertence ao usuário logado
+            return idReserva === termo && idClienteReserva === idUsuarioLogado;
+        });
+
+        console.log("Encontradas:", filtradas); // Debug
+
+        // 4. Renderiza
+        renderizarListaReservas(filtradas, container);
+
+    } catch (err) {
+        console.error("ERRO DETALHADO DA BUSCA:", err); // <--- OLHE O CONSOLE F12 SE O ERRO PERSISTIR
+        container.innerHTML = `<p style="color:red">Erro ao buscar: ${err.message}</p>`;
+    }
 }
 
 /* =============== USUÁRIO =============== */
@@ -478,20 +531,31 @@ async function confirmarReservaHandler() {
 }
 
 // Cancela uma reserva
+// Cancela uma reserva
 async function cancelarReserva(id) {
-    if(!confirm("Deseja cancelar esta reserva?")) return;
+    if(!confirm(`Tem certeza que deseja cancelar a reserva #${id}?`)) return;
     
     try {
-        await fetch(`${API_RESERVAS}/${id}/status`, {
+        const resp = await fetch(`${API_RESERVAS}/${id}/status`, {
             method: "PATCH",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ status: "CANCELADA" })
+            body: JSON.stringify({ status: "CANCELADA" }) // Certifique-se que é maiúsculo igual ao Enum Java
         });
-        alert("Reserva cancelada.");
+
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(errText || "Erro ao cancelar no servidor.");
+        }
+
+        alert("Reserva cancelada com sucesso.");
+        
+        // Atualiza as listas para refletir a mudança de status e cor
         loadReservas();
-        loadVeiculos(); // O carro volta a ficar disponível
+        loadVeiculos(); 
+
     } catch(e) {
-        alert("Erro ao cancelar.");
+        console.error(e);
+        alert("Erro ao cancelar: " + e.message);
     }
 }
 

@@ -34,6 +34,18 @@
 
     <div class="card" style="margin-top: 20px; border-left: 5px solid #2196F3;">
         <h3>Minhas Reservas</h3>
+        <div class="card" style="margin-top: 20px; border-left: 5px solid #2196F3;">
+        <h3>Minhas Reservas</h3>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <input id="searchReservaId" placeholder="Pesquisar por ID da Reserva..." style="flex:1;">
+                <button id="btnSearchReserva">Buscar</button>
+                <button id="btnReloadReservas">Recarregar</button>
+            </div>
+
+            <div id="reservas-list">
+                <p>Carregando...</p>
+            </div>
+        </div>
         <button id="btnReloadReservas" style="margin-bottom:10px;">Atualizar Reservas</button>
         <div id="reservas-list">
             <p>Carregando...</p>
